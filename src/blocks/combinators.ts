@@ -40,6 +40,7 @@ import {
   executeInOpener,
   executeInTarget,
   executeInAll,
+  executeInFrame,
 } from "@/background/executor";
 import { boolean } from "@/utils";
 import { getLoggingConfig } from "@/background/logging";
@@ -51,8 +52,13 @@ export type ReaderConfig =
 
 export interface BlockConfig {
   id: string;
-  window?: "self" | "opener" | "target" | "broadcast";
+
+  window?: "self" | "opener" | "target" | "broadcast" | "frame";
+
   outputKey?: string;
+
+  // (Experimental) match pattern for which frame to execute an action in
+  frameOrigin?: string;
 
   // (Optional) condition expression written in templateEngine for deciding if the step should be run. If not
   // provided, the step is run unconditionally.
@@ -233,6 +239,14 @@ async function runStage(
     });
   } else if (stage.window === "target") {
     return await executeInTarget(stage.id, blockArgs, {
+      ctxt: args,
+      messageContext: logger.context,
+    });
+  } else if (stage.window === "frame") {
+    if (stage.frameOrigin == null) {
+      throw new Error("frameOrigin is required for frame target");
+    }
+    return await executeInFrame(stage.frameOrigin, stage.id, blockArgs, {
       ctxt: args,
       messageContext: logger.context,
     });

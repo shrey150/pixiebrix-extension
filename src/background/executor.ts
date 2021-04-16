@@ -30,11 +30,13 @@ import { RenderedArgs } from "@/core";
 import { isBackgroundPage, isContentScript } from "webext-detect-page";
 import { emitDevtools } from "@/background/devtools/internal";
 import { Availability } from "@/blocks/types";
+import { testMatchPattern } from "@/blocks/available";
 
 const MESSAGE_RUN_BLOCK_OPENER = `${MESSAGE_PREFIX}RUN_BLOCK_OPENER`;
 const MESSAGE_RUN_BLOCK_TARGET = `${MESSAGE_PREFIX}RUN_BLOCK_TARGET`;
 const MESSAGE_RUN_BLOCK_BROADCAST = `${MESSAGE_PREFIX}RUN_BLOCK_BROADCAST`;
 const MESSAGE_RUN_BLOCK_FRAME_NONCE = `${MESSAGE_PREFIX}RUN_BLOCK_FRAME_NONCE`;
+const MESSAGE_RUN_BLOCK_FRAME_PATTERN = `${MESSAGE_PREFIX}RUN_BLOCK_FRAME_PATTERN`;
 const MESSAGE_ACTIVATE_TAB = `${MESSAGE_PREFIX}MESSAGE_ACTIVATE_TAB`;
 const MESSAGE_CLOSE_TAB = `${MESSAGE_PREFIX}MESSAGE_CLOSE_TAB`;
 const MESSAGE_OPEN_TAB = `${MESSAGE_PREFIX}MESSAGE_OPEN_TAB`;
@@ -49,6 +51,7 @@ interface Target {
 const tabToOpener = new Map<number, number>();
 const tabToTarget = new Map<number, number>();
 const tabReady: { [tabId: string]: { [frameId: string]: boolean } } = {};
+const frameInitialUrls = new Map<number, Map<number, string>>();
 const nonceToTarget = new Map<string, Target>();
 
 async function sleep(ms: number): Promise<void> {
@@ -188,6 +191,7 @@ function backgroundListener(
       const { nonce, ...payload } = action.payload;
 
       console.debug(`Waiting for frame with nonce ${nonce} to be ready`);
+
       return waitNonceReady(nonce, {
         isAvailable: payload.options.isAvailable,
       }).then(() => {
@@ -207,6 +211,29 @@ function backgroundListener(
           { frameId: target.frameId }
         );
       });
+    }
+    case MESSAGE_RUN_BLOCK_FRAME_PATTERN: {
+      const action = request as RunBlockAction;
+      const { origin, ...payload } = action.payload;
+
+      for (const [frameId, url] of frameInitialUrls
+        .get(sender.tab.id)
+        .entries()) {
+        if (testMatchPattern(origin, url)) {
+          return browser.tabs.sendMessage(
+            sender.tab.id,
+            {
+              type: CONTENT_MESSAGE_RUN_BLOCK,
+              payload: {
+                sourceTabId: sender.tab.id,
+                ...payload,
+              },
+            },
+            { frameId }
+          );
+        }
+      }
+      throw new Error(`No frame ready for origin ${origin}`);
     }
     case MESSAGE_RUN_BLOCK_TARGET: {
       const target = tabToTarget.get(sender.tab.id);
@@ -281,10 +308,17 @@ function backgroundListener(
         nonceToTarget.set(nonce, { tabId, frameId });
       }
 
+      // Track initial URL so we can target by initial origin
+      if (!frameInitialUrls.has(tabId)) {
+        frameInitialUrls.set(tabId, new Map());
+      }
+      frameInitialUrls.get(tabId).set(frameId, sender.url);
+
       if (!tabReady[tabId]) {
         tabReady[tabId] = {};
       }
       tabReady[tabId][frameId] = true;
+
       emitDevtools("ContentScriptReady", { tabId, frameId });
       return Promise.resolve();
     }
@@ -388,6 +422,50 @@ export async function executeForNonce(
   }
 
   throw new Error(`Unable to run ${blockId} after ${maxRetries} retries`);
+}
+
+export async function executeInFrame(
+  origin: string,
+  blockId: string,
+  blockArgs: RenderedArgs,
+  options: RemoteBlockOptions
+): Promise<unknown> {
+  console.debug(
+    `Running ${blockId} in content script for frame with origin: ${origin}`
+  );
+
+  const { maxRetries = DEFAULT_MAX_RETRIES } = options;
+  let retries = 0;
+
+  while (retries < maxRetries) {
+    try {
+      return await browser.runtime.sendMessage({
+        type: MESSAGE_RUN_BLOCK_FRAME_PATTERN,
+        payload: {
+          origin,
+          blockId,
+          blockArgs,
+          options,
+        },
+      });
+    } catch (err) {
+      if (err?.message?.includes("Could not establish connection")) {
+        console.debug(
+          `Frame with origin ${origin} not ready for ${blockId}. Retrying in ${
+            100 * (retries + 1)
+          }ms`
+        );
+        await sleep(250 * (retries + 1));
+      } else {
+        throw err;
+      }
+    }
+    retries++;
+  }
+
+  throw new Error(
+    `Unable to run ${blockId} in frame after ${maxRetries} retries`
+  );
 }
 
 export async function executeInTarget(

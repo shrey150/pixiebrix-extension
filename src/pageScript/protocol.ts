@@ -21,6 +21,7 @@ import {
   GET_COMPONENT_DATA,
   GET_COMPONENT_INFO,
   SET_COMPONENT_DATA,
+  CALL_COMPONENT_PROP,
 } from "@/messaging/constants";
 import { ReaderOutput } from "@/core";
 import { ElementInfo } from "@/nativeEditor/frameworks";
@@ -45,6 +46,12 @@ export type ReadPayload = ReadOptions & {
   selector: string;
 };
 
+export type EventPayload = {
+  framework: Framework;
+  selector: string;
+  handler: string;
+};
+
 export interface WritePayload {
   framework: Framework;
   selector: string;
@@ -53,6 +60,10 @@ export interface WritePayload {
 
 export const setComponentData = createSendScriptMessage<void, WritePayload>(
   SET_COMPONENT_DATA
+);
+
+export const callComponentProp = createSendScriptMessage<void, EventPayload>(
+  CALL_COMPONENT_PROP
 );
 
 export const getComponentData = createSendScriptMessage<

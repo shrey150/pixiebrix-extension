@@ -111,6 +111,10 @@ export interface WriteAdapter<
   setData: (component: TComponent, values: Partial<TData>) => void;
 }
 
+export interface EventAdapter<TComponent = unknown> {
+  triggerEvent: (component: TComponent, handler: string) => void;
+}
+
 export type ReadableComponentAdapter<
   TComponent = unknown,
   TData extends ComponentData = ComponentData

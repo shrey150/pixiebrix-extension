@@ -57,6 +57,7 @@ import {
   SCRIPT_LOADED,
   SEARCH_WINDOW,
   SET_COMPONENT_DATA,
+  CALL_COMPONENT_PROP,
 } from "./messaging/constants";
 import detectLibraries from "@/vendors/libraryDetector/detect";
 import adapters from "@/frameworks/adapters";
@@ -67,6 +68,7 @@ import {
   ReadOptions,
   WritePayload,
   initialize,
+  EventPayload,
 } from "@/pageScript/protocol";
 import {
   awaitValue,
@@ -76,6 +78,8 @@ import {
   TimeoutError,
 } from "./utils";
 import {
+  ComponentAdapter,
+  EventAdapter,
   ReadableComponentAdapter,
   traverse,
   WriteableComponentAdapter,
@@ -241,6 +245,20 @@ attachListener(
     const element = requireSingleElement(selector);
     const component = adapter.getComponent(element);
     adapter.setData(component, valueMap);
+  }
+);
+
+attachListener(
+  CALL_COMPONENT_PROP,
+  ({ framework, selector, handler }: EventPayload) => {
+    const adapter = (adapters.get(framework) as unknown) as EventAdapter &
+      ComponentAdapter;
+    if (!adapter?.triggerEvent) {
+      throw new Error(`No event adapter available for ${framework}`);
+    }
+    const element = requireSingleElement(selector);
+    const component = adapter.getComponent(element);
+    adapter.triggerEvent(component, handler);
   }
 );
 

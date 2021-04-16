@@ -18,7 +18,11 @@
 import { pickBy } from "lodash";
 import { ComponentNotFoundError, ignoreNotFound } from "@/frameworks/errors";
 import { RootInstanceVisitor } from "@/frameworks/scanner";
-import { ReadableComponentAdapter, traverse } from "@/frameworks/component";
+import {
+  EventAdapter,
+  ReadableComponentAdapter,
+  traverse,
+} from "@/frameworks/component";
 import { isNode } from "@/frameworks/dom";
 
 // React architecture references:
@@ -116,6 +120,9 @@ export function findReactComponent(node: Node, traverseUp = 0): Fiber {
     const owner = (x: LegacyInstance) => x._currentElement._owner;
     const fiber = traverse(owner, owner(domFiber), traverseUp);
     return fiber._instance as Fiber;
+  } else if ("elementType" in domFiber) {
+    // FIXME: using for demo, this is the DOM Fiber not the component
+    return domFiber as Fiber;
   } else {
     return traverse(getComponentFiber, getComponentFiber(domFiber), traverseUp);
   }
@@ -132,7 +139,7 @@ export class ReactRootVisitor implements RootInstanceVisitor<RootInstance> {
   }
 }
 
-export const adapter: ReadableComponentAdapter<Fiber> = {
+export const adapter: ReadableComponentAdapter<Fiber> & EventAdapter<Fiber> = {
   isManaged,
   getComponent: (node) => ignoreNotFound(() => findReactComponent(node, 0)),
   getParent: getComponentFiber,
@@ -140,6 +147,22 @@ export const adapter: ReadableComponentAdapter<Fiber> = {
     isNode(instance.stateNode) ? instance.stateNode : null,
   getData: readReactProps,
   hasData: hasReactProps,
+  triggerEvent: (instance: Fiber, handler: string) => {
+    if (Object.prototype.hasOwnProperty.call(instance.memoizedProps, handler)) {
+      // safe because we're calling with no arguments
+      // eslint-disable-next-line security/detect-object-injection
+      const prop = instance.memoizedProps[handler];
+      if (typeof prop !== "function") {
+        throw new Error(`Prop ${handler} is not a method`);
+      }
+      prop();
+    } else {
+      console.debug("Component props", {
+        props: Object.keys(instance.memoizedProps),
+      });
+      throw new Error(`Handler ${handler} not defined in props for component`);
+    }
+  },
 };
 
 export default adapter;

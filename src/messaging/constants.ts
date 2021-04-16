@@ -25,9 +25,9 @@ export const DETECT_FRAMEWORK_VERSIONS =
 export const GET_COMPONENT_DATA = "@@pixiebrix/script/GET_COMPONENT_DATA";
 export const SET_COMPONENT_DATA = "@@pixiebrix/script/SET_COMPONENT_DATA";
 export const GET_COMPONENT_INFO = "@@pixiebrix/script/GET_COMPONENT_INFO";
-
 export const FORWARD_FRAME_DATA = "@@pixiebrix/script/FORWARD_FRAME_DATA";
 export const REQUEST_FRAME_DATA = "@@pixiebrix/script/REQUEST_FRAME_DATA";
+export const CALL_COMPONENT_PROP = "@@pixiebrix/script/CALL_COMPONENT_PROP";
 
 type UNKNOWN_VERSION = null;
 

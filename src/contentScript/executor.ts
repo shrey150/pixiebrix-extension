@@ -52,6 +52,7 @@ export interface RunBlockAction {
   payload: {
     sourceTabId?: number;
     nonce?: string;
+    origin?: string;
     blockId: string;
     blockArgs: { [param: string]: unknown };
     options: RemoteBlockOptions;

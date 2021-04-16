@@ -19,14 +19,19 @@ import { Effect } from "@/types";
 import { registerBlock } from "@/blocks/registry";
 import { BlockArg, BlockOptions, Schema } from "@/core";
 import { boolean } from "@/utils";
+import { callComponentProp } from "@/pageScript/protocol";
 
 /**
  * Set the value of an input, doing the right thing for check boxes, etc.
  */
-function setValue(
+async function setValue(
   $input: JQuery<HTMLElement>,
   value: unknown,
-  { dispatchEvent = true }: { dispatchEvent?: boolean } = {}
+  {
+    dispatchEvent = true,
+    framework = "html",
+    selector,
+  }: { dispatchEvent?: boolean; framework?: string; selector?: string } = {}
 ) {
   if ($input.is(":radio") || $input.is(":checkbox")) {
     $input.prop("checked", boolean(value));
@@ -35,10 +40,18 @@ function setValue(
   }
 
   if (dispatchEvent) {
-    $input.each(function () {
-      const event = new Event("change", { bubbles: true });
-      this.dispatchEvent(event);
-    });
+    if (framework === "react") {
+      await callComponentProp({
+        selector,
+        handler: "onChange",
+        framework: "react",
+      });
+    } else {
+      $input.each(function () {
+        const event = new Event("change", { bubbles: true });
+        this.dispatchEvent(event);
+      });
+    }
   }
 }
 
@@ -54,6 +67,12 @@ export class SetInputValue extends Effect {
   inputSchema: Schema = {
     type: "object",
     properties: {
+      framework: {
+        type: "string",
+        description: "The input's front-end framework",
+        enum: ["html", "react"],
+        default: "html",
+      },
       inputs: {
         type: "array",
         items: {
@@ -78,13 +97,20 @@ export class SetInputValue extends Effect {
     required: ["inputs"],
   };
 
-  async effect({ inputs }: BlockArg, { logger }: BlockOptions): Promise<void> {
+  async effect(
+    { inputs, framework = "html" }: BlockArg,
+    { logger }: BlockOptions
+  ): Promise<void> {
     for (const { selector, value } of inputs) {
       const $input = $(document).find(selector);
       if ($input.length === 0) {
         logger.warn(`Could not find input for selector: ${selector}`);
       } else {
-        setValue($input, value, { dispatchEvent: true });
+        await setValue($input, value, {
+          dispatchEvent: true,
+          selector,
+          framework,
+        });
       }
     }
   }
@@ -145,7 +171,7 @@ export class FormFill extends Effect {
       if ($input.length === 0) {
         logger.warn(`Could not find input ${name} on the form`);
       }
-      setValue($input, value, { dispatchEvent: true });
+      await setValue($input, value, { dispatchEvent: true });
     }
 
     for (const [selector, value] of Object.entries(fieldSelectors)) {
@@ -155,7 +181,7 @@ export class FormFill extends Effect {
           `Could not find input with selector ${selector} on the form`
         );
       }
-      setValue($input, value, { dispatchEvent: true });
+      await setValue($input, value, { dispatchEvent: true });
     }
 
     if (typeof submit === "boolean") {
