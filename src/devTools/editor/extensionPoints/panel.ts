@@ -179,6 +179,10 @@ export async function makePanelFormState(
     );
   }
 
+  if (extensionPoint.definition.type !== "panel") {
+    throw new Error("Expected panel extension point type");
+  }
+
   return {
     uuid: config.id,
     installed: true,

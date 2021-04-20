@@ -76,6 +76,7 @@ module.exports = {
     frame: path.resolve(rootDir, "src/frame"),
     options: path.resolve(rootDir, "src/options"),
     support: path.resolve(rootDir, "src/support"),
+    popup: path.resolve(rootDir, "src/popup"),
   },
   resolve: {
     // Need to set these fields manually as their default values rely on `web` target.

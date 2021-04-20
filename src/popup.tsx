@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Pixie Brix, LLC
+ * Copyright (C) 2021 Pixie Brix, LLC
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,28 +15,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { Metadata } from "@/core";
-import { ReaderConfig } from "@/blocks/combinators";
-import { Availability } from "@/blocks/types";
+import "regenerator-runtime/runtime";
+import "core-js/stable";
+import "@/extensionContext";
+import App from "./browserAction/App";
+import ReactDOM from "react-dom";
+import React from "react";
 
-type ExtensionPointType =
-  | "panel"
-  | "menuItem"
-  | "trigger"
-  | "contextMenu"
-  | "actionPanel";
+import { initRollbar } from "@/telemetry/rollbar";
 
-export interface ExtensionPointDefinition {
-  type: ExtensionPointType;
-  isAvailable: Availability;
-  reader: ReaderConfig;
-}
+import "@/popup.scss";
+import "bootstrap/dist/css/bootstrap.min.css";
+// import "vendors/bootstrap.min.css";
+import "vendors/overrides.scss";
 
-export interface ExtensionPointConfig<
-  T extends ExtensionPointDefinition = ExtensionPointDefinition
-> {
-  apiVersion?: "v1";
-  metadata: Metadata;
-  definition: T;
-  kind: "extensionPoint";
-}
+initRollbar();
+
+ReactDOM.render(<App />, document.getElementById("container"));

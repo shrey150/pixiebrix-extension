@@ -34,6 +34,7 @@ import "./messaging/external";
 import "./background/requests";
 import "./background/locator";
 import "./background/logging";
+import "./background/browserAction/protocol";
 import "./background/auth";
 import "./background/contextMenus";
 import "./background/devtools";

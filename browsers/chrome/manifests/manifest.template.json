@@ -38,6 +38,10 @@
       "https://app.pixiebrix.com/*"
     ]
   },
+  "browser_action": {
+    "default_title": "PixieBrix",
+    "default_popup": "popup.html"
+  },
   "web_accessible_resources": [
     "css/*",
     "bundles/*",
