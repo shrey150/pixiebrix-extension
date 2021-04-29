@@ -64,6 +64,7 @@ async function getExtensionPoints(): Promise<ExtensionPanel[]> {
       console.warn(`Cannot locate extension point ${extensionPointId}`);
     }
 
+    // FIXME: should look to see if extension point is available
     if (extensionPoint instanceof ActionPanelExtensionPoint) {
       const activeExtensions = Object.values(extensions).filter(
         (x) => x.active
@@ -98,10 +99,11 @@ const ExtensionPanelTab: React.FunctionComponent<{ panel: ExtensionPanel }> = ({
       return null;
     }
     for (const blockConfig of castArray(panel.extension.config.body)) {
+      // render data in the first renderer
       const block = await blockRegistry.lookup(blockConfig.id);
       if ("render" in block) {
-        const body = await (block as Renderer).render(data, {
-          ctxt: data,
+        const body = await (block as Renderer).render(data.args, {
+          ctxt: data.ctxt,
           root: null,
           logger: new ConsoleLogger(),
         });
@@ -112,8 +114,8 @@ const ExtensionPanelTab: React.FunctionComponent<{ panel: ExtensionPanel }> = ({
           return <Component {...props} />;
         }
       }
-      throw new Error("No renderer brick found");
     }
+    throw new Error("No renderer brick found");
   }, [panel.extension, data]);
 
   return (

@@ -19,7 +19,10 @@ import {
   BlockConfig,
   blockList,
   BlockPipeline,
+  HeadlessModeError,
+  makeServiceContext,
   mergeReaders,
+  reducePipeline,
 } from "@/blocks/combinators";
 import { ExtensionPoint } from "@/types";
 import { IBlock, IExtension, IExtensionPoint, IReader, Schema } from "@/core";
@@ -37,10 +40,23 @@ export interface ActionPanelConfig {
   body: BlockConfig | BlockPipeline;
 }
 
-let _extensions: IExtension<ActionPanelConfig>[] = [];
+export async function getRendererData({
+  extensionId,
+  extensionPointId,
+}: {
+  extensionId: string;
+  extensionPointId: string;
+}): Promise<unknown> {
+  const extensionPoint = ActionPanelExtensionPoint._extensionPoints.find(
+    (x) => x.id === extensionPointId
+  );
+  return extensionPoint.generateData(extensionId);
+}
 
 export abstract class ActionPanelExtensionPoint extends ExtensionPoint<ActionPanelConfig> {
   readonly permissions: Permissions.Permissions = {};
+
+  static _extensionPoints: ActionPanelExtensionPoint[] = [];
 
   protected constructor(
     id: string,
@@ -49,6 +65,7 @@ export abstract class ActionPanelExtensionPoint extends ExtensionPoint<ActionPan
     icon = "faColumns"
   ) {
     super(id, name, description, icon);
+    ActionPanelExtensionPoint._extensionPoints.push(this);
   }
 
   inputSchema: Schema = propertiesToSchema(
@@ -75,28 +92,49 @@ export abstract class ActionPanelExtensionPoint extends ExtensionPoint<ActionPan
   }
 
   removeExtensions(): void {
-    const currentIds = new Set<string>(this.extensions.map((x) => x.id));
-    _extensions = _extensions.filter((x) => !currentIds.has(x.id));
+    this.extensions.splice(0, this.extensions.length);
   }
 
-  private async registerExtension(
-    extension: IExtension<ActionPanelConfig>
-  ): Promise<void> {
-    if (!_extensions.some((x) => x.id === extension.id)) {
-      _extensions.push(extension);
+  async generateData(extensionId: string): Promise<unknown> {
+    const extension = this.extensions.find((x) => x.id === extensionId);
+    const reader = await this.defaultReader();
+    const ctxt = await reader.read(document);
+    const serviceContext = await makeServiceContext(extension.services);
+
+    const extensionLogger = this.logger.childLogger({
+      deploymentId: extension._deployment?.id,
+      extensionId: extension.id,
+    });
+
+    const { body } = extension.config;
+
+    try {
+      await reducePipeline(body, ctxt, extensionLogger, document, {
+        validate: true,
+        serviceArgs: serviceContext,
+        headless: true,
+      });
+      throw Error("Action panel body must include a renderer");
+    } catch (err) {
+      console.log("err", { err });
+
+      if (err instanceof HeadlessModeError) {
+        return {
+          args: err.args,
+          ctxt: { ...(err.ctxt as any), ...serviceContext },
+        };
+      } else {
+        throw err;
+      }
     }
   }
 
   async run(): Promise<void> {
     if (!this.extensions.length) {
       console.debug(
-        `contextMenu extension point ${this.id} has no installed extension`
+        `actionPanel extension point ${this.id} has no installed extension`
       );
       return;
-    }
-
-    for (const extension of this.extensions) {
-      await this.registerExtension(extension);
     }
   }
 

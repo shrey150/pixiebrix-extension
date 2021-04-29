@@ -138,6 +138,7 @@ interface ReduceOptions {
   validate?: boolean;
   logValues?: boolean;
   serviceArgs: RenderedArgs;
+  headless?: boolean;
 }
 
 type SchemaProperties = { [key: string]: Schema };
@@ -168,11 +169,24 @@ function isReader(block: IBlock): block is IReader {
   return "read" in block;
 }
 
+export class HeadlessModeError extends Error {
+  public readonly args: unknown;
+  public readonly ctxt: unknown;
+
+  constructor(message: string, args: unknown, ctxt: unknown) {
+    super(message);
+    this.name = "HeadlessModeError";
+    this.args = args;
+    this.ctxt = ctxt;
+  }
+}
+
 type StageOptions = {
   context: RenderedArgs;
   validate: boolean;
   logValues: boolean;
   logger: Logger;
+  headless: boolean;
   root: ReaderRoot;
 };
 
@@ -180,7 +194,7 @@ async function runStage(
   block: IBlock,
   stage: BlockConfig,
   args: RenderedArgs,
-  { root, context, validate, logValues, logger }: StageOptions
+  { root, context, validate, logValues, logger, headless }: StageOptions
 ): Promise<unknown> {
   const argContext = { ...context, ...args };
   const stageConfig = stage.config ?? {};
@@ -251,6 +265,14 @@ async function runStage(
     );
   }
 
+  if (isRendererBlock(block) && headless) {
+    throw new HeadlessModeError(
+      "Cannot run render in headless mode",
+      blockArgs,
+      args
+    );
+  }
+
   try {
     if (stage.window === "opener") {
       return await executeInOpener(stage.id, blockArgs, {
@@ -282,6 +304,11 @@ function isEffectBlock(block: IBlock & { effect?: Function }): boolean {
   return typeof block.effect === "function";
 }
 
+// eslint-disable-next-line @typescript-eslint/ban-types
+function isRendererBlock(block: IBlock & { render?: Function }): boolean {
+  return typeof block.render === "function";
+}
+
 /** Execute a pipeline of blocks and return the result. */
 export async function reducePipeline(
   config: BlockConfig | BlockPipeline,
@@ -289,6 +316,7 @@ export async function reducePipeline(
   logger: Logger,
   root: HTMLElement | Document = null,
   options: ReduceOptions = {
+    headless: false,
     validate: true,
     logValues: false,
     serviceArgs: {} as RenderedArgs,
@@ -350,6 +378,7 @@ export async function reducePipeline(
         logValues,
         validate: options.validate,
         logger: stageLogger,
+        headless: options.headless,
       });
 
       if (logValues) {
@@ -375,6 +404,10 @@ export async function reducePipeline(
         }
       }
     } catch (ex) {
+      if (ex instanceof HeadlessModeError) {
+        throw ex;
+      }
+
       if (stage.onError?.alert) {
         if (logger.context.deploymentId) {
           try {
@@ -395,6 +428,7 @@ export async function reducePipeline(
           console.warn("Can only send alert from deployment context");
         }
       }
+
       throw new ContextError(
         ex,
         stageContext,

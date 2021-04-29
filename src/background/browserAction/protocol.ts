@@ -17,25 +17,35 @@
 
 import { isBackgroundPage } from "webext-detect-page";
 import { browser, Runtime } from "webextension-polyfill-ts";
-import { RemoteProcedureCallRequest } from "@/messaging/protocol";
 import { allowBackgroundSender } from "@/background/protocol";
+import { runBrowserAction } from "@/contentScript/browserActions";
 
 export const MESSAGE_PREFIX = "@@pixiebrix/browserAction/";
 
 export const RUN_ACTION_PANEL = `${MESSAGE_PREFIX}RUN_ACTION_PANEL`;
 
+type ActionPanelRequest = {
+  type: typeof RUN_ACTION_PANEL;
+  payload: {
+    extensionId: string;
+    extensionPointId: string;
+  };
+};
+
 function handler(
-  request: RemoteProcedureCallRequest,
+  request: ActionPanelRequest,
   sender: Runtime.MessageSender
 ): Promise<any> {
   if (allowBackgroundSender(sender)) {
     if (request.type === RUN_ACTION_PANEL) {
       console.log("Action Panel Sender", { sender });
+
+      const { extensionId, extensionPointId } = request.payload;
+
       return browser.tabs.query({ active: true }).then((tabs) => {
-        return {
-          url: tabs[0].url,
-          tabId: tabs[0].id,
-        };
+        const tab = tabs[0];
+        const target = { tabId: tab.id, frameId: 0 };
+        return runBrowserAction(target, { extensionId, extensionPointId });
       });
     }
   }
