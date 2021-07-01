@@ -15,14 +15,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import pTimeout from "p-timeout";
 import { liftBackground } from "@/background/protocol";
 import { browser, ContextMenus, Menus, Tabs } from "webextension-polyfill-ts";
 import { isBackgroundPage } from "webext-detect-page";
 import { reportError } from "@/telemetry/logging";
 import { handleMenuAction } from "@/contentScript/contextMenus";
 import { showNotification } from "@/contentScript/notify";
-import { ensureContentScript } from "@/background/util";
+import { injectContentScript, waitReady } from "@/background/util";
 import { reportEvent } from "@/telemetry/events";
 import { hasCancelRootCause } from "@/errors";
 import { getErrorMessage } from "@/extensionPoints/helpers";
@@ -60,11 +59,8 @@ async function dispatchMenu(
   }
 
   // Using the context menu gives temporary access to the page
-  await pTimeout(
-    ensureContentScript(target),
-    CONTEXT_SCRIPT_INSTALL_MS,
-    `contentScript not ready in ${CONTEXT_SCRIPT_INSTALL_MS}s`
-  );
+  await injectContentScript(target);
+  await waitReady(target, { maxWaitMillis: CONTEXT_SCRIPT_INSTALL_MS });
 
   try {
     await handleMenuAction(target, {

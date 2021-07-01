@@ -18,10 +18,10 @@
 import { isBackgroundPage } from "webext-detect-page";
 import { toggleActionPanel } from "@/contentScript/browserAction";
 import { reportError } from "@/telemetry/logging";
-import { ensureContentScript } from "@/background/util";
+import { injectContentScript } from "@/background/util";
 import { browser, Runtime } from "webextension-polyfill-ts";
 import { allowSender } from "@/actionPanel/protocol";
-import { sleep, isPrivatePageError } from "@/utils";
+import { isErrorObject, sleep } from "@/utils";
 
 export const MESSAGE_PREFIX = "@@pixiebrix/background/browserAction/";
 
@@ -49,21 +49,30 @@ async function handleBrowserAction(tab: chrome.tabs.Tab): Promise<void> {
   tabFrames.delete(tab.id);
 
   try {
-    await ensureContentScript({ tabId: tab.id, frameId: 0 });
+    await injectContentScript({ tabId: tab.id, frameId: 0 });
     const nonce = await toggleActionPanel({ tabId: tab.id, frameId: 0 });
     tabNonces.set(tab.id, nonce);
   } catch (error: unknown) {
-    if (isPrivatePageError(error)) {
-      void showErrorInOptions(
-        "ERR_BROWSER_ACTION_TOGGLE_SPECIAL_PAGE",
-        tab.index
-      );
-      return;
-    }
+    if (isErrorObject(error)) {
+      // Example error messages:
+      // Cannot access a chrome:// URL
+      // Cannot access a chrome-extension:// URL of different extension
+      // Cannot access contents of url "chrome-extension://mpjjildhmpddojocokjkgmlkkkfjnepo/options.html#/". Extension manifest must request permission to access this host.
+      // The extensions gallery cannot be scripted.
+      if (
+        /cannot be scripted|(chrome|about|extension):\/\//.test(error.message)
+      ) {
+        await showErrorInOptions(
+          "ERR_BROWSER_ACTION_TOGGLE_SPECIAL_PAGE",
+          tab.index
+        );
+        return;
+      }
 
-    // Firefox does not catch injection errors so we don't get a specific error message
-    // https://github.com/pixiebrix/pixiebrix-extension/issues/579#issuecomment-866451242
-    await showErrorInOptions("ERR_BROWSER_ACTION_TOGGLE", tab.index);
+      // Firefox does not catch injection errors so we don't get a specific error message
+      // https://github.com/pixiebrix/pixiebrix-extension/issues/579#issuecomment-866451242
+      await showErrorInOptions("ERR_BROWSER_ACTION_TOGGLE", tab.index);
+    }
 
     // Only report unknown-reason errors
     reportError(error);
