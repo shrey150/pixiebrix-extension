@@ -30,6 +30,7 @@ import {
 import { TraceError } from "@/telemetry/trace";
 import { useAsyncEffect } from "use-async-effect";
 import traceErrorInputValidator from "../validators/traceErrorInputValidator";
+import traceErrorGeneralValidator from "../validators/traceErrorGeneralValidator";
 
 function usePipelineField(
   pipelineFieldName: string
@@ -56,10 +57,8 @@ function usePipelineField(
       }
 
       const formikErrors: Record<string, unknown> = {};
-      if (!traceErrorInputValidator(formikErrors, traceError, blockIndex)) {
-        // eslint-disable-next-line security/detect-object-injection
-        formikErrors[blockIndex] = traceError.message;
-      }
+      traceErrorInputValidator(formikErrors, traceError, blockIndex);
+      traceErrorGeneralValidator(formikErrors, traceError, blockIndex);
 
       return formikErrors;
     },

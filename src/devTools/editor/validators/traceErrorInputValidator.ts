@@ -34,8 +34,8 @@ const REQUIRED_FIELD_REGEX = /^Instance does not have required property "(?<prop
 function traceErrorInputValidator(
   pipelineErrors: Record<string, unknown>,
   traceError: JsonObject,
-  blockIndex: number
-) {
+  blockIndex: string
+): boolean {
   if (!isInputValidationError(traceError)) {
     return false;
   }
