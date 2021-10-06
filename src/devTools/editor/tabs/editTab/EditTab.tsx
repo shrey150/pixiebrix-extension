@@ -15,7 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Col, Tab } from "react-bootstrap";
 import EditorNodeLayout from "@/devTools/editor/tabs/editTab/editorNodeLayout/EditorNodeLayout";
 import { getIn, useFormikContext } from "formik";
@@ -68,7 +68,6 @@ const EditTab: React.FC<{
   pipelineFieldName?: string;
 }> = ({ eventKey, pipelineFieldName = "extension.body" }) => {
   useExtensionTrace();
-  // ToDo Figure out how to properly bind field validation errors to Formik state // useRuntimeErrors(pipelineFieldName);
 
   const { values, setValues: setFormValues } = useFormikContext<FormState>();
   const { extensionPoint, type: elementType } = values;
@@ -79,8 +78,6 @@ const EditTab: React.FC<{
     [extensionPoint.metadata.id]
   );
 
-  const { label, icon, EditorNode: FoundationNode } = ADAPTERS.get(elementType);
-
   const [activeNodeIndex, setActiveNodeIndex] = useState<number>(0);
 
   const [
@@ -89,11 +86,6 @@ const EditTab: React.FC<{
     pipelineFieldHelpers,
     traceError,
   ] = usePipelineField(pipelineFieldName);
-
-  const blockFieldName = useMemo(
-    () => `${pipelineFieldName}[${activeNodeIndex - 1}]`,
-    [pipelineFieldName, activeNodeIndex]
-  );
 
   // Load once
   const [allBlocks] = useAsyncState(async () => blockRegistry.all(), [], []);
@@ -114,12 +106,6 @@ const EditTab: React.FC<{
     [resolvedBlocks]
   );
 
-  const onSelectNode =
-    // Wrapper only accepting a number (i.e., does not accept a state update method)
-    useCallback((index: number) => {
-      setActiveNodeIndex(index);
-    }, []);
-
   const removeBlock = (pipelineIndex: number) => {
     let nextState = produce(values, (draft) => {
       const pipeline = getIn(draft, pipelineFieldName) as BlockPipeline;
@@ -136,6 +122,10 @@ const EditTab: React.FC<{
 
     setFormValues(nextState);
   };
+
+  console.log("extensionPoint", extensionPoint);
+  console.log("blockPipeline", blockPipeline);
+  console.log("resolvedBlocks", resolvedBlocks);
 
   const blockNodes: EditorNodeProps[] = zip(blockPipeline, resolvedBlocks).map(
     ([action, block], index) =>
@@ -158,7 +148,7 @@ const EditTab: React.FC<{
             hasError: Boolean(blockPipelineError?.[index]),
             hasWarning: traceError?.blockInstanceId === action.instanceId,
             onClick: () => {
-              onSelectNode(index + 1);
+              setActiveNodeIndex(index + 1);
             },
           }
         : {
@@ -166,17 +156,15 @@ const EditTab: React.FC<{
           }
   );
 
-  const initialNode: EditorNodeProps = useMemo(
-    () => ({
-      outputKey: "input",
-      title: label,
-      icon,
-      onClick: () => {
-        onSelectNode(0);
-      },
-    }),
-    [icon, label, onSelectNode]
-  );
+  const { label, icon, EditorNode: FoundationNode } = ADAPTERS.get(elementType);
+  const initialNode: EditorNodeProps = {
+    outputKey: "input",
+    title: label,
+    icon,
+    onClick: () => {
+      setActiveNodeIndex(0);
+    },
+  };
 
   const nodes: EditorNodeProps[] = [initialNode, ...blockNodes];
 
@@ -189,31 +177,29 @@ const EditTab: React.FC<{
     return filterBlocks(allBlocks, { excludeTypes });
   }, [allBlocks, elementType]);
 
-  const addBlock = useCallback(
-    async (block: IBlock, nodeIndex: number) => {
-      const pipelineIndex = nodeIndex - 1;
-      const prev = blockPipeline.slice(0, pipelineIndex);
-      const next = blockPipeline.slice(pipelineIndex, blockPipeline.length);
-      const newBlock = {
-        id: block.id,
-        outputKey: await generateFreshOutputKey(
-          block,
-          compact([
-            "input" as OutputKey,
-            ...blockPipeline.map((x) => x.outputKey),
-          ])
-        ),
-        instanceId: uuidv4(),
-        config:
-          getExampleBlockConfig(block) ?? defaultBlockConfig(block.inputSchema),
-      };
-      pipelineFieldHelpers.setValue([...prev, newBlock, ...next]);
-      onSelectNode(nodeIndex);
-    },
-    [onSelectNode, pipelineFieldHelpers, blockPipeline]
-  );
+  const addBlock = async (block: IBlock, nodeIndex: number) => {
+    const pipelineIndex = nodeIndex - 1;
+    const prev = blockPipeline.slice(0, pipelineIndex);
+    const next = blockPipeline.slice(pipelineIndex, blockPipeline.length);
+    const newBlock = {
+      id: block.id,
+      outputKey: await generateFreshOutputKey(
+        block,
+        compact([
+          "input" as OutputKey,
+          ...blockPipeline.map((x) => x.outputKey),
+        ])
+      ),
+      instanceId: uuidv4(),
+      config:
+        getExampleBlockConfig(block) ?? defaultBlockConfig(block.inputSchema),
+    };
+    pipelineFieldHelpers.setValue([...prev, newBlock, ...next]);
+    setActiveNodeIndex(nodeIndex);
+  };
 
   const blockInstanceId = blockPipeline[activeNodeIndex - 1]?.instanceId;
+  const blockFieldName = `${pipelineFieldName}[${activeNodeIndex - 1}]`;
 
   return (
     <Tab.Pane eventKey={eventKey} className={styles.tabPane}>
