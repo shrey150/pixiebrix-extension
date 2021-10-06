@@ -100,11 +100,26 @@ const EditTab: React.FC<{
     [allBlocks, pipelineIdHash]
   );
 
-  const [blockTypes] = useAsyncState(
-    async () =>
-      Promise.all(resolvedBlocks.map(async (block) => getType(block))),
-    [resolvedBlocks]
-  );
+  const addBlock = async (block: IBlock, nodeIndex: number) => {
+    const pipelineIndex = nodeIndex - 1;
+    const prev = blockPipeline.slice(0, pipelineIndex);
+    const next = blockPipeline.slice(pipelineIndex, blockPipeline.length);
+    const newBlock = {
+      id: block.id,
+      outputKey: await generateFreshOutputKey(
+        block,
+        compact([
+          "input" as OutputKey,
+          ...blockPipeline.map((x) => x.outputKey),
+        ])
+      ),
+      instanceId: uuidv4(),
+      config:
+        getExampleBlockConfig(block) ?? defaultBlockConfig(block.inputSchema),
+    };
+    pipelineFieldHelpers.setValue([...prev, newBlock, ...next]);
+    setActiveNodeIndex(nodeIndex);
+  };
 
   const removeBlock = (pipelineIndex: number) => {
     let nextState = produce(values, (draft) => {
@@ -126,6 +141,8 @@ const EditTab: React.FC<{
   console.log("extensionPoint", extensionPoint);
   console.log("blockPipeline", blockPipeline);
   console.log("resolvedBlocks", resolvedBlocks);
+
+  const { label, icon, EditorNode: FoundationNode } = ADAPTERS.get(elementType);
 
   const blockNodes: EditorNodeProps[] = zip(blockPipeline, resolvedBlocks).map(
     ([action, block], index) =>
@@ -156,7 +173,6 @@ const EditTab: React.FC<{
           }
   );
 
-  const { label, icon, EditorNode: FoundationNode } = ADAPTERS.get(elementType);
   const initialNode: EditorNodeProps = {
     outputKey: "input",
     title: label,
@@ -177,26 +193,15 @@ const EditTab: React.FC<{
     return filterBlocks(allBlocks, { excludeTypes });
   }, [allBlocks, elementType]);
 
-  const addBlock = async (block: IBlock, nodeIndex: number) => {
-    const pipelineIndex = nodeIndex - 1;
-    const prev = blockPipeline.slice(0, pipelineIndex);
-    const next = blockPipeline.slice(pipelineIndex, blockPipeline.length);
-    const newBlock = {
-      id: block.id,
-      outputKey: await generateFreshOutputKey(
-        block,
-        compact([
-          "input" as OutputKey,
-          ...blockPipeline.map((x) => x.outputKey),
-        ])
-      ),
-      instanceId: uuidv4(),
-      config:
-        getExampleBlockConfig(block) ?? defaultBlockConfig(block.inputSchema),
-    };
-    pipelineFieldHelpers.setValue([...prev, newBlock, ...next]);
-    setActiveNodeIndex(nodeIndex);
-  };
+  const [lastBlockIsRenderer] = useAsyncState(async () => {
+    if (!resolvedBlocks || resolvedBlocks.length === 0) {
+      return false;
+    }
+
+    return (
+      (await getType(resolvedBlocks[resolvedBlocks.length - 1])) === "renderer"
+    );
+  }, [resolvedBlocks]);
 
   const blockInstanceId = blockPipeline[activeNodeIndex - 1]?.instanceId;
   const blockFieldName = `${pipelineFieldName}[${activeNodeIndex - 1}]`;
@@ -208,11 +213,7 @@ const EditTab: React.FC<{
           <EditorNodeLayout
             nodes={nodes}
             activeNodeIndex={activeNodeIndex}
-            showAppend={
-              !blockTypes ||
-              blockTypes?.length === 0 ||
-              blockTypes[blockTypes.length - 1] !== "renderer"
-            }
+            showAppend={!lastBlockIsRenderer}
             relevantBlocksToAdd={relevantBlocksToAdd}
             addBlock={addBlock}
           />
