@@ -28,13 +28,8 @@ import {
   setNestedObjectValues,
 } from "formik";
 import { TraceError } from "@/telemetry/trace";
-import { isInputValidationError } from "@/blocks/errors";
-import { OutputUnit } from "@cfworker/json-schema";
 import { useAsyncEffect } from "use-async-effect";
-import { joinName } from "@/utils";
-import { set } from "lodash";
-
-const REQUIRED_FIELD_REGEX = /^Instance does not have required property "(?<property>.+)"\.$/;
+import traceErrorInputValidator from "../validators/traceErrorInputValidator";
 
 function usePipelineField(
   pipelineFieldName: string
@@ -44,15 +39,15 @@ function usePipelineField(
   FieldHelperProps<BlockPipeline>,
   TraceError
 ] {
-  const traceError = useSelector(selectTraceError);
+  const errorTraceEntry = useSelector(selectTraceError);
 
   const validatePipeline = useCallback(
     (pipeline: BlockPipeline) => {
-      if (!traceError) {
+      if (!errorTraceEntry) {
         return;
       }
 
-      const { error, blockInstanceId } = traceError;
+      const { error: traceError, blockInstanceId } = errorTraceEntry;
       const blockIndex = pipeline.findIndex(
         (block) => block.instanceId === blockInstanceId
       );
@@ -60,36 +55,15 @@ function usePipelineField(
         return;
       }
 
-      const errors: Record<string, unknown> = {};
-      if (isInputValidationError(error)) {
-        for (const unit of (error.errors as unknown) as OutputUnit[]) {
-          let propertyNameInPipeline: string;
-          let errorMessage: string;
-
-          const property = REQUIRED_FIELD_REGEX.exec(unit.error)?.groups
-            .property;
-          if (property) {
-            propertyNameInPipeline = joinName(
-              String(blockIndex),
-              "config",
-              property
-            );
-            errorMessage = "Error from the last run: This field is required";
-          } else {
-            propertyNameInPipeline = String(blockIndex);
-            errorMessage = error.message;
-          }
-
-          set(errors, propertyNameInPipeline, errorMessage);
-        }
-      } else {
+      const formikErrors: Record<string, unknown> = {};
+      if (!traceErrorInputValidator(formikErrors, traceError, blockIndex)) {
         // eslint-disable-next-line security/detect-object-injection
-        errors[blockIndex] = error.message;
+        formikErrors[blockIndex] = traceError.message;
       }
 
-      return errors;
+      return formikErrors;
     },
-    [traceError]
+    [errorTraceEntry]
   );
 
   const formikField = useField<BlockPipeline>({
@@ -110,10 +84,10 @@ function usePipelineField(
         formikContext.setTouched(setNestedObjectValues(validationErrors, true));
       }
     },
-    [traceError]
+    [errorTraceEntry]
   );
 
-  return [...formikField, traceError];
+  return [...formikField, errorTraceEntry];
 }
 
 export default usePipelineField;
