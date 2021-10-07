@@ -21,13 +21,14 @@ import { useCallback } from "react";
 import { BlockPipeline } from "@/blocks/types";
 import { useField, useFormikContext, setNestedObjectValues } from "formik";
 import { TraceError } from "@/telemetry/trace";
-import { isInputValidationError } from "@/blocks/errors";
-import { OutputUnit } from "@cfworker/json-schema";
 import { useAsyncEffect } from "use-async-effect";
 import { joinName } from "@/utils";
 import { set } from "lodash";
+import { UUID } from "@/core";
+import traceErrorInputValidator from "../validators/traceErrorInputValidator";
+import traceErrorGeneralValidator from "../validators/traceErrorGeneralValidator";
 
-const REQUIRED_FIELD_REGEX = /^Instance does not have required property "(?<property>.+)"\.$/;
+const pipelineBlocksFieldName = "extension.pipelineBlocks";
 
 function usePipelineField(): {
   blockPipeline: BlockPipeline;
@@ -37,54 +38,20 @@ function usePipelineField(): {
 } {
   const traceError = useSelector(selectTraceError);
 
-  const validatePipelineBlocks = useCallback(
-    (pipeline: BlockPipeline) => {
-      if (!traceError) {
-        return;
-      }
+  const validatePipelineBlocks = useCallback(() => {
+    if (!errorTraceEntry) {
+      return;
+    }
 
-      const { error, blockInstanceId } = traceError;
-      const blockIndex = pipeline.findIndex(
-        (block) => block.instanceId === blockInstanceId
-      );
-      if (blockIndex === -1) {
-        return;
-      }
+    const formikErrors: Record<string, unknown> = {};
+    traceErrorInputValidator(formikErrors, errorTraceEntry);
+    traceErrorGeneralValidator(formikErrors, errorTraceEntry);
 
-      const errors: Record<string, unknown> = {};
-      if (isInputValidationError(error)) {
-        for (const unit of (error.errors as unknown) as OutputUnit[]) {
-          let propertyNameInPipeline: string;
-          let errorMessage: string;
+    return formikErrors;
+  }, [errorTraceEntry]);
 
-          const property = REQUIRED_FIELD_REGEX.exec(unit.error)?.groups
-            .property;
-          if (property) {
-            propertyNameInPipeline = joinName(
-              String(blockIndex),
-              "config",
-              property
-            );
-            errorMessage = "Error from the last run: This field is required";
-          } else {
-            propertyNameInPipeline = String(blockIndex);
-            errorMessage = error.message;
-          }
-
-          set(errors, propertyNameInPipeline, errorMessage);
-        }
-      } else {
-        // eslint-disable-next-line security/detect-object-injection
-        errors[blockIndex] = error.message;
-      }
-
-      return errors;
-    },
-    [traceError]
-  );
-
-  const formikField = useField<BlockPipeline>({
-    name: "extension.blockPipeline",
+  const formikField = useField<Record<UUID, BlockConfig>>({
+    name: pipelineBlocksFieldName,
     // @ts-expect-error working with nested errors
     validate: validatePipelineBlocks,
   });
@@ -101,7 +68,7 @@ function usePipelineField(): {
         formikContext.setTouched(setNestedObjectValues(validationErrors, true));
       }
     },
-    [traceError]
+    [errorTraceEntry]
   );
 
   return {
