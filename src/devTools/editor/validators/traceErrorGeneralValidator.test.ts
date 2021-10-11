@@ -16,22 +16,21 @@
  */
 
 import { traceErrorFactory } from "@/tests/factories";
-import { uuidv4 } from "@/types/helpers";
 import traceErrorGeneralValidator from "./traceErrorGeneralValidator";
 
 test("sets block error", () => {
   const pipelineErrors: Record<string, unknown> = {};
-  const blockInstanceId = uuidv4();
-  const errorTraceEntry = traceErrorFactory({ blockInstanceId });
+  const errorTraceEntry = traceErrorFactory();
 
-  traceErrorGeneralValidator(pipelineErrors, errorTraceEntry);
+  traceErrorGeneralValidator(pipelineErrors, errorTraceEntry, 0);
 
-  expect(pipelineErrors[blockInstanceId]).toBe(errorTraceEntry.error.message);
+  // eslint-disable-next-line security/detect-object-injection
+  expect(pipelineErrors[0]).toBe(errorTraceEntry.error.message);
 });
 
 test("doesn't override nested error", () => {
-  const blockInstanceId = uuidv4();
-  const errorTraceEntry = traceErrorFactory({ blockInstanceId });
+  const errorTraceEntry = traceErrorFactory();
+  const blockIndex = 5;
 
   const nestedBlockError = {
     config: {
@@ -39,10 +38,11 @@ test("doesn't override nested error", () => {
     },
   };
   const pipelineErrors = {
-    [blockInstanceId]: nestedBlockError,
+    [blockIndex]: nestedBlockError,
   };
 
-  traceErrorGeneralValidator(pipelineErrors, errorTraceEntry);
+  traceErrorGeneralValidator(pipelineErrors, errorTraceEntry, blockIndex);
 
-  expect(pipelineErrors[blockInstanceId]).toBe(nestedBlockError);
+  // eslint-disable-next-line security/detect-object-injection
+  expect(pipelineErrors[blockIndex]).toBe(nestedBlockError);
 });

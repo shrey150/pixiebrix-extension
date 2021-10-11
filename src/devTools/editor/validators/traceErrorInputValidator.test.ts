@@ -1,5 +1,4 @@
 import { traceErrorFactory } from "@/tests/factories";
-import { uuidv4 } from "@/types/helpers";
 import traceErrorInputValidator from "./traceErrorInputValidator";
 
 test("ignores non input errors", () => {
@@ -8,7 +7,8 @@ test("ignores non input errors", () => {
 
   const hasInputErrors = traceErrorInputValidator(
     pipelineErrors,
-    errorTraceEntry
+    errorTraceEntry,
+    0
   );
 
   expect(hasInputErrors).toBe(false);
@@ -16,8 +16,7 @@ test("ignores non input errors", () => {
 });
 
 test("figures required property error", () => {
-  const pipelineErrors: Record<string, any> = {};
-  const blockInstanceId = uuidv4();
+  const pipelineErrors: Record<string, unknown> = {};
   const property = "testProp";
   const traceError = {
     schema: {},
@@ -28,24 +27,24 @@ test("figures required property error", () => {
     ],
   };
   const errorTraceEntry = traceErrorFactory({
-    blockInstanceId,
     error: traceError,
   });
 
   const hasInputErrors = traceErrorInputValidator(
     pipelineErrors,
-    errorTraceEntry
+    errorTraceEntry,
+    0
   );
 
   expect(hasInputErrors).toBe(true);
-  expect(pipelineErrors[blockInstanceId].config[property]).toEqual(
+  // @ts-expect-error -- pipelineErrors[0] has 'config'
+  expect(pipelineErrors[0].config[property]).toEqual(
     "Error from the last run: This field is required"
   );
 });
 
 test("sets unknown input error on the block level", () => {
-  const pipelineErrors: Record<string, any> = {};
-  const blockInstanceId = uuidv4();
+  const pipelineErrors: Record<string, unknown> = {};
   const errorMessage = "This is an unknown input validation error";
   const traceError = {
     schema: {},
@@ -56,15 +55,15 @@ test("sets unknown input error on the block level", () => {
     ],
   };
   const errorTraceEntry = traceErrorFactory({
-    blockInstanceId,
     error: traceError,
   });
 
   const hasInputErrors = traceErrorInputValidator(
     pipelineErrors,
-    errorTraceEntry
+    errorTraceEntry,
+    0
   );
 
   expect(hasInputErrors).toBe(true);
-  expect(pipelineErrors[blockInstanceId]).toEqual(errorMessage);
+  expect(pipelineErrors[0]).toEqual(errorMessage);
 });

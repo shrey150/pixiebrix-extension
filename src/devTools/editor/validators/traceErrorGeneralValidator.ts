@@ -19,11 +19,14 @@ import { TraceError } from "@/telemetry/trace";
 
 function traceErrorGeneralValidator(
   pipelineErrors: Record<string, unknown>,
-  errorTraceEntry: TraceError
+  errorTraceEntry: TraceError,
+  blockIndex: number
 ): boolean {
-  const { error: traceError, blockInstanceId } = errorTraceEntry;
-  if (!pipelineErrors[blockInstanceId]) {
-    pipelineErrors[blockInstanceId] = traceError.message;
+  const blockIndexString = String(blockIndex);
+  // eslint-disable-next-line security/detect-object-injection
+  if (!pipelineErrors[blockIndexString]) {
+    // eslint-disable-next-line security/detect-object-injection
+    pipelineErrors[blockIndexString] = errorTraceEntry.error.message;
     return true;
   }
 

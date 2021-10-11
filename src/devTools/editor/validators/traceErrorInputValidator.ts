@@ -31,26 +31,30 @@ const requiredFieldRegex = /^Instance does not have required property "(?<proper
  */
 function traceErrorInputValidator(
   pipelineErrors: Record<string, unknown>,
-  errorTraceEntry: TraceError
+  errorTraceEntry: TraceError,
+  blockIndex: number
 ): boolean {
-  const { error: traceError, blockInstanceId } = errorTraceEntry;
+  const { error: traceError } = errorTraceEntry;
 
   if (!isInputValidationError(traceError)) {
     return false;
   }
 
+  const blockIndexString = String(blockIndex);
+
   for (const unit of traceError.errors) {
     const property = requiredFieldRegex.exec(unit.error)?.groups.property;
     if (property) {
       const propertyNameInPipeline = joinName(
-        blockInstanceId,
+        blockIndexString,
         "config",
         property
       );
       const errorMessage = "Error from the last run: This field is required";
       set(pipelineErrors, propertyNameInPipeline, errorMessage);
     } else if (unit.error) {
-      pipelineErrors[blockInstanceId] = unit.error;
+      // eslint-disable-next-line security/detect-object-injection
+      pipelineErrors[blockIndexString] = unit.error;
     }
   }
 

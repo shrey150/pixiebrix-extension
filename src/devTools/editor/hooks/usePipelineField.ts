@@ -18,39 +18,48 @@
 import { useSelector } from "react-redux";
 import { selectTraceError } from "@/devTools/editor/slices/runtimeSelectors";
 import { useCallback } from "react";
-import { BlockPipeline } from "@/blocks/types";
+import { BlockConfig, BlockPipeline } from "@/blocks/types";
 import { useField, useFormikContext, setNestedObjectValues } from "formik";
 import { TraceError } from "@/telemetry/trace";
 import { useAsyncEffect } from "use-async-effect";
-import { joinName } from "@/utils";
-import { set } from "lodash";
-import { UUID } from "@/core";
-import traceErrorInputValidator from "../validators/traceErrorInputValidator";
-import traceErrorGeneralValidator from "../validators/traceErrorGeneralValidator";
+import traceErrorInputValidator from "@/devTools/editor/validators/traceErrorInputValidator";
+import traceErrorGeneralValidator from "@/devTools/editor/validators/traceErrorGeneralValidator";
 
-const pipelineBlocksFieldName = "extension.pipelineBlocks";
+const pipelineBlocksFieldName = "extension.blockPipeline";
 
 function usePipelineField(): {
   blockPipeline: BlockPipeline;
-  blockPipelineErrors: unknown[];
-  setBlockPipeline: (value: BlockPipeline, shouldValidate: boolean) => void;
-  traceError: TraceError;
+  blockPipelineErrors: string | Record<string, unknown>;
+  errorTraceEntry: TraceError;
 } {
-  const traceError = useSelector(selectTraceError);
+  const errorTraceEntry = useSelector(selectTraceError);
 
-  const validatePipelineBlocks = useCallback(() => {
-    if (!errorTraceEntry) {
-      return;
-    }
+  const validatePipelineBlocks = useCallback(
+    (pipeline: BlockPipeline) => {
+      if (!errorTraceEntry) {
+        return;
+      }
 
-    const formikErrors: Record<string, unknown> = {};
-    traceErrorInputValidator(formikErrors, errorTraceEntry);
-    traceErrorGeneralValidator(formikErrors, errorTraceEntry);
+      const { blockInstanceId } = errorTraceEntry;
+      const blockIndex = pipeline.findIndex(
+        (block) => block.instanceId === blockInstanceId
+      );
+      if (blockIndex === -1) {
+        return;
+      }
 
-    return formikErrors;
-  }, [errorTraceEntry]);
+      const formikErrors: Record<string, unknown> = {};
+      traceErrorInputValidator(formikErrors, errorTraceEntry, blockIndex);
+      traceErrorGeneralValidator(formikErrors, errorTraceEntry, blockIndex);
 
-  const formikField = useField<Record<UUID, BlockConfig>>({
+      return formikErrors;
+    },
+    [errorTraceEntry]
+  );
+
+  const [{ value: blockPipeline }, { error: blockPipelineErrors }] = useField<
+    BlockConfig[]
+  >({
     name: pipelineBlocksFieldName,
     // @ts-expect-error working with nested errors
     validate: validatePipelineBlocks,
@@ -72,10 +81,9 @@ function usePipelineField(): {
   );
 
   return {
-    blockPipeline: formikField[0].value,
-    blockPipelineErrors: (formikField[1].error as unknown) as unknown[],
-    setBlockPipeline: formikField[2].setValue,
-    traceError,
+    blockPipeline,
+    blockPipelineErrors,
+    errorTraceEntry,
   };
 }
 
